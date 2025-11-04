@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle-Pedestrian Interaction Simulator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background: #f5f5f5;
+            overflow: hidden;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .top-section {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 15px;
+            flex: 1;
+        }
+        .canvas-container {
+            background: #ecf0f1;
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        canvas {
+            border: 2px solid #34495e;
+            border-radius: 4px;
+            background: white;
+            max-width: 100%;
+            height: auto;
+        }
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .status {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .status.good {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.poor {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+            white-space: nowrap;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1;
+        }
+        .control-group {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .control-group h3 {
+            margin: 0 0 8px 0;
+            color: #2c3e50;
+            font-size: 13px;
+        }
+        label {
+            display: block;
+            margin: 8px 0 3px 0;
+            color: #555;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 3px 0;
+        }
+        .value-display {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        small {
+            font-size: 10px;
+            color: #666;
+        }
+        .bottom-section {
+            margin-top: 10px;
+            flex-shrink: 0;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .metric-card.safety {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .metric-card.efficiency {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .metric-card.fairness {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .metric-label {
+            font-size: 10px;
+            opacity: 0.9;
+            margin-bottom: 3px;
+        }
+        .metric-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-section">
+            <div class="canvas-container">
+                <canvas id="simulationCanvas" width="700" height="480"></canvas>
+            </div>
+
+            <div class="right-panel">
+                <div class="status" id="statusDisplay">Click "Start Simulation" to begin</div>
+
+                <div class="preset-buttons">
+                    <button onclick="runSimulation()">▶ Start</button>
+                    <button onclick="resetSimulation()">🔄 Reset</button>
+                    <button onclick="setPreset('clear')">Clear Signal</button>
+                    <button onclick="setPreset('ambiguous')">Ambiguous</button>
+                </div>
+
+                <div class="controls">
+                    <div class="control-group">
+                        <h3>Vehicle Behavior</h3>
+                        <label>
+                            Short-Stop Time: <span class="value-display" id="stopTimeValue">1.3s</span>
+                            <input type="range" id="stopTime" min="0.3" max="3.0" step="0.1" value="1.3">
+                        </label>
+                        <label>
+                            Vehicle Speed: <span class="value-display" id="speedValue">30 mph</span>
+                            <input type="range" id="speed" min="15" max="45" step="5" value="30">
+                        </label>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>Pedestrian Response</h3>
+                        <label>
+                            Ped-Start Delay: <span class="value-display" id="pedDelayValue">0.5s</span>
+                            <input type="range" id="pedDelay" min="-1.0" max="2.0" step="0.1" value="0.5">
+                        </label>
+                        <small>Negative = ped starts before vehicle stops</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-section">
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-label">SHORT-STOP TIME</div>
+                    <div class="metric-value" id="metricStopTime">1.3s</div>
+                </div>
+                <div class="metric-card safety">
+                    <div class="metric-label">SAFETY MARGIN</div>
+                    <div class="metric-value" id="metricSafety">-</div>
+                </div>
+                <div class="metric-card efficiency">
+                    <div class="metric-label">TOTAL TIME</div>
+                    <div class="metric-value" id="metricEfficiency">-</div>
+                </div>
+                <div class="metric-card fairness">
+                    <div class="metric-label">FAIRNESS</div>
+                    <div class="metric-value" id="metricFairness">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let animationFrame;
+        let isAnimating = false;
+        
+        // Simulation state
+        let vehicle = {
+            x: 50,
+            y: 280,
+            width: 60,
+            height: 35,
+            speed: 0,
+            state: 'approaching' // approaching, stopping, stopped, accelerating, crossing
+        };
+        
+        let pedestrian = {
+            x: 450,
+            y: 180,
+            width: 20,
+            height: 40,
+            state: 'waiting' // waiting, walking, crossed
+        };
+        
+        let crosswalk = {
+            x: 450,
+            width: 100
+        };
+        
+        let timeline = {
+            startTime: 0,
+            vehicleStopTime: 0,
+            vehicleMinSpeedTime: 0,
+            vehicleAccelerateTime: 0,
+            vehicleCrosswalkTime: 0,
+            pedestrianStartTime: 0,
+            pedestrianExitTime: 0,
+            endTime: 0
+        };
+        
+        // Update value displays
+        document.getElementById('stopTime').addEventListener('input', function(e) {
+            document.getElementById('stopTimeValue').textContent = e.target.value + 's';
+            updateMetrics();
+        });
+        
+        document.getElementById('speed').addEventListener('input', function(e) {
+            document.getElementById('speedValue').textContent = e.target.value + ' mph';
+        });
+        
+        document.getElementById('pedDelay').addEventListener('input', function(e) {
+            document.getElementById('pedDelayValue').textContent = e.target.value + 's';
+        });
+        
+        function setPreset(type) {
+            if (type === 'clear') {
+                // Study average - clear communication
+                document.getElementById('stopTime').value = 1.3;
+                document.getElementById('speed').value = 30;
+                document.getElementById('pedDelay').value = 0.5;
+            } else if (type === 'ambiguous') {
+                // Ambiguous communication
+                document.getElementById('stopTime').value = 0.4;
+                document.getElementById('speed').value = 40;
+                document.getElementById('pedDelay').value = 1.5;
+            }
+            
+            // Update displays
+            document.getElementById('stopTimeValue').textContent = document.getElementById('stopTime').value + 's';
+            document.getElementById('speedValue').textContent = document.getElementById('speed').value + ' mph';
+            document.getElementById('pedDelayValue').textContent = document.getElementById('pedDelay').value + 's';
+            updateMetrics();
+        }
+        
+        function updateMetrics() {
+            const stopTime = parseFloat(document.getElementById('stopTime').value);
+            document.getElementById('metricStopTime').textContent = stopTime.toFixed(1) + 's';
+        }
+        
+        function drawScene() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw road
+            ctx.fillStyle = '#555';
+            ctx.fillRect(0, 260, canvas.width, 80);
+            
+            // Draw lane markings
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([20, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, 300);
+            ctx.lineTo(canvas.width, 300);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw crosswalk
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 5; i++) {
+                ctx.fillRect(crosswalk.x + i * 20, 260, 15, 80);
+            }
+            
+            // Draw sidewalks
+            ctx.fillStyle = '#ccc';
+            ctx.fillRect(0, 220, canvas.width, 40);
+            ctx.fillRect(0, 340, canvas.width, 40);
+            
+            // Draw vehicle
+            ctx.fillStyle = vehicle.state === 'stopped' ? '#e74c3c' : '#3498db';
+            ctx.fillRect(vehicle.x, vehicle.y, vehicle.width, vehicle.height);
+            
+            // Vehicle windows
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(vehicle.x + 10, vehicle.y + 5, 15, 12);
+            ctx.fillRect(vehicle.x + 35, vehicle.y + 5, 15, 12);
+            
+            // Vehicle wheels
+            ctx.fillStyle = '#000';
+            ctx.fillRect(vehicle.x + 5, vehicle.y + 30, 10, 8);
+            ctx.fillRect(vehicle.x + 45, vehicle.y + 30, 10, 8);
+            
+            // Draw stopping distance indicator
+            if (vehicle.state === 'stopped' || vehicle.state === 'accelerating') {
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(vehicle.x + vehicle.width, 300);
+                ctx.lineTo(crosswalk.x, 300);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Distance label
+                const distance = crosswalk.x - (vehicle.x + vehicle.width);
+                const stopTime = parseFloat(document.getElementById('stopTime').value);
+                ctx.fillStyle = '#e74c3c';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText(`${stopTime.toFixed(1)}s to crosswalk`, vehicle.x + vehicle.width + 20, 290);
+            }
+            
+            // Draw pedestrian
+            ctx.fillStyle = pedestrian.state === 'walking' ? '#27ae60' : '#95a5a6';
+            
+            // Body
+            ctx.fillRect(pedestrian.x, pedestrian.y + 15, pedestrian.width, pedestrian.height - 15);
+            
+            // Head
+            ctx.beginPath();
+            ctx.arc(pedestrian.x + pedestrian.width/2, pedestrian.y + 8, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw status text
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 14px Arial';
+            if (vehicle.state === 'approaching') {
+                ctx.fillText('🚗 Vehicle Approaching', 15, 30);
+            } else if (vehicle.state === 'stopping') {
+                ctx.fillText('🛑 Vehicle Slowing Down', 15, 30);
+            } else if (vehicle.state === 'stopped') {
+                ctx.fillText('⏸️ Vehicle Stopped (Signaling Yield)', 15, 30);
+            } else if (vehicle.state === 'accelerating') {
+                ctx.fillText('▶️ Vehicle Accelerating', 15, 30);
+            } else if (vehicle.state === 'crossing') {
+                ctx.fillText('✅ Vehicle Crossing', 15, 30);
+            }
+            
+            ctx.font = '13px Arial';
+            if (pedestrian.state === 'waiting') {
+                ctx.fillText('🚶 Pedestrian: Observing vehicle behavior', 15, 55);
+            } else if (pedestrian.state === 'walking') {
+                ctx.fillText('🚶 Pedestrian: Crossing (signal understood)', 15, 55);
+            } else if (pedestrian.state === 'crossed') {
+                ctx.fillText('✅ Pedestrian: Crossed safely', 15, 55);
+            }
+        }
+        
+        function resetSimulation() {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+            isAnimating = false;
+            
+            vehicle.x = 50;
+            vehicle.state = 'approaching';
+            pedestrian.x = 450;
+            pedestrian.y = 180;
+            pedestrian.state = 'waiting';
+            
+            timeline = {
+                startTime: 0,
+                vehicleStopTime: 0,
+                vehicleMinSpeedTime: 0,
+                vehicleAccelerateTime: 0,
+                vehicleCrosswalkTime: 0,
+                pedestrianStartTime: 0,
+                pedestrianExitTime: 0,
+                endTime: 0
+            };
+            
+            document.getElementById('statusDisplay').className = 'status';
+            document.getElementById('statusDisplay').textContent = 'Click "Start Simulation" to begin';
+            document.getElementById('metricSafety').textContent = '-';
+            document.getElementById('metricEfficiency').textContent = '-';
+            document.getElementById('metricFairness').textContent = '-';
+            
+            drawScene();
+        }
+        
+        function runSimulation() {
+            resetSimulation();
+            
+            const speed = parseFloat(document.getElementById('speed').value);
+            const stopTime = parseFloat(document.getElementById('stopTime').value);
+            const pedDelay = parseFloat(document.getElementById('pedDelay').value);
+            
+            isAnimating = true;
+            timeline.startTime = Date.now();
+            
+            let phase = 0;
+            const vehicleSpeed = speed / 10;
+            
+            function animate() {
+                if (!isAnimating) return;
+                
+                const elapsed = (Date.now() - timeline.startTime) / 1000;
+                
+                // Phase 0: Vehicle approaches
+                if (phase === 0) {
+                    vehicle.x += vehicleSpeed;
+                    vehicle.state = 'approaching';
+                    
+                    // Calculate stop position based on short-stop time
+                    const stopPosition = crosswalk.x - (stopTime * vehicleSpeed * 60) - vehicle.width - 20;
+                    
+                    if (vehicle.x >= stopPosition - 50) {
+                        phase = 1;
+                        vehicle.state = 'stopping';
+                    }
+                }
+                
+                // Phase 1: Vehicle slowing down
+                else if (phase === 1) {
+                    vehicle.x += vehicleSpeed * 0.3;
+                    
+                    const stopPosition = crosswalk.x - (stopTime * vehicleSpeed * 60) - vehicle.width - 20;
+                    
+                    if (vehicle.x >= stopPosition) {
+                        phase = 2;
+                        vehicle.state = 'stopped';
+                        timeline.vehicleMinSpeedTime = elapsed;
+                        timeline.vehicleStopTime = elapsed;
+                    }
+                }
+                
+                // Phase 2: Vehicle stopped (short stop)
+                else if (phase === 2) {
+                    vehicle.state = 'stopped';
+                    
+                    // Pedestrian decision
+                    if (pedDelay < 0) {
+                        // Negative delay - pedestrian already started
+                        if (!timeline.pedestrianStartTime) {
+                            timeline.pedestrianStartTime = timeline.vehicleMinSpeedTime + pedDelay;
+                            if (elapsed >= timeline.pedestrianStartTime) {
+                                pedestrian.state = 'walking';
+                            }
+                        }
+                    } else {
+                        // Positive delay - pedestrian waits
+                        if (elapsed >= timeline.vehicleMinSpeedTime + pedDelay) {
+                            if (!timeline.pedestrianStartTime) {
+                                timeline.pedestrianStartTime = elapsed;
+                            }
+                            pedestrian.state = 'walking';
+                        }
+                    }
+                    
+                    // Wait for pedestrian to be safely in crosswalk
+                    if (pedestrian.state === 'walking' && elapsed >= timeline.pedestrianStartTime + 1.5) {
+                        phase = 3;
+                        vehicle.state = 'accelerating';
+                        timeline.vehicleAccelerateTime = elapsed;
+                    }
+                }
+                
+                // Phase 3: Vehicle accelerating toward crosswalk
+                else if (phase === 3) {
+                    vehicle.x += vehicleSpeed * 0.5;
+                    vehicle.state = 'accelerating';
+                    
+                    if (vehicle.x + vehicle.width >= crosswalk.x) {
+                        phase = 4;
+                        vehicle.state = 'crossing';
+                        timeline.vehicleCrosswalkTime = elapsed;
+                    }
+                }
+                
+                // Phase 4: Vehicle crossing
+                else if (phase === 4) {
+                    vehicle.x += vehicleSpeed;
+                    
+                    if (vehicle.x > canvas.width) {
+                        phase = 5;
+                        timeline.endTime = elapsed;
+                    }
+                }
+                
+                // Move pedestrian
+                if (pedestrian.state === 'walking') {
+                    pedestrian.y += 2;
+                    
+                    if (pedestrian.y >= 340) {
+                        pedestrian.state = 'crossed';
+                        if (!timeline.pedestrianExitTime) {
+                            timeline.pedestrianExitTime = elapsed;
+                        }
+                    }
+                }
+                
+                // Calculate and display metrics
+                if (phase >= 4) {
+                    const safetyMargin = timeline.vehicleCrosswalkTime - timeline.pedestrianExitTime;
+                    const totalTime = timeline.endTime || elapsed;
+                    const fairness = (timeline.vehicleAccelerateTime - timeline.vehicleStopTime) - 
+                                   (timeline.pedestrianStartTime - timeline.vehicleMinSpeedTime);
+                    
+                    document.getElementById('metricSafety').textContent = safetyMargin.toFixed(2) + 's';
+                    document.getElementById('metricEfficiency').textContent = totalTime.toFixed(1) + 's';
+                    document.getElementById('metricFairness').textContent = fairness.toFixed(2) + 's';
+                    
+                    // Evaluate communication quality
+                    if (safetyMargin > 1 && stopTime > 0.8 && stopTime < 2.0) {
+                        document.getElementById('statusDisplay').className = 'status good';
+                        document.getElementById('statusDisplay').textContent = '✅ Clear Communication - Safe Interaction';
+                    } else {
+                        document.getElementById('statusDisplay').className = 'status poor';
+                        document.getElementById('statusDisplay').textContent = '⚠️ Ambiguous Communication - Potential Confusion';
+                    }
+                }
+                
+                drawScene();
+                
+                if (phase < 5) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    isAnimating = false;
+                }
+            }
+            
+            animate();
+        }
+        
+        // Initial draw
+        drawScene();
+        updateMetrics();
+    </script>
+</body>
+</html>
